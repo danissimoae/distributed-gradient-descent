@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  coordinator:
+    build:
+      context: .
+      dockerfile: coordinator/Dockerfile
+    container_name: gradient-coordinator
+    ports:
+      - "5000:5000"
+    networks:
+      - gradient-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    depends_on:
+      - coordinator
+    environment:
+      - COORDINATOR_URL=http://coordinator:5000
+    networks:
+      - gradient-net
+    command: ["python", "worker/worker.py", "worker-${WORKER_ID:-1}", "http://coordinator:5000"]
+    deploy:
+      replicas: 3
+
+  viewer:
+    build:
+      context: .
+      dockerfile: viewer/Dockerfile
+    container_name: gradient-viewer
+    ports:
+      - "8080:80"
+    networks:
+      - gradient-net
+    depends_on:
+      - coordinator
+
+networks:
+  gradient-net:
+    driver: bridge

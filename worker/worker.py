@@ -112,12 +112,16 @@ async def wait_for_coordinator(coordinator_url: str, worker_id: str, max_retries
 
 
 async def main():
-    if len(sys.argv) < 2:
-        print("Usage: python worker.py <worker_id> [coordinator_url]")
-        sys.exit(1)
+    import os
+    import socket
 
-    worker_id = sys.argv[1]
-    coordinator_url = sys.argv[2] if len(sys.argv) > 2 else "http://localhost:5000"
+    # Генерируем worker_id из аргумента или hostname (для Docker)
+    if len(sys.argv) >= 2:
+        worker_id = sys.argv[1]
+    else:
+        worker_id = os.getenv('HOSTNAME', socket.gethostname())
+
+    coordinator_url = sys.argv[2] if len(sys.argv) > 2 else os.getenv('COORDINATOR_URL', 'http://localhost:5000')
 
     await wait_for_coordinator(coordinator_url, worker_id)
 
