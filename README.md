@@ -12,10 +12,14 @@
 
 $$
 \begin{aligned}
-y &= w \cdot x + b + \varepsilon, \quad \varepsilon \sim \mathcal{N}(0, \sigma^2) \\[8pt]
-\mathcal{L}(w, b) &= \frac{1}{2n} \sum_{i=1}^{n} (y_i - (w \cdot x_i + b))^2 \\[8pt]
-\nabla_w \mathcal{L} &= \frac{1}{n} \sum_{i=1}^{n} (w \cdot x_i + b - y_i) \cdot x_i \\[8pt]
-\nabla_b \mathcal{L} &= \frac{1}{n} \sum_{i=1}^{n} (w \cdot x_i + b - y_i) \\[8pt]
+y &= w \cdot x + b + \varepsilon, \quad \varepsilon \sim \mathcal{N}(0, \sigma^2) 
+\\[8pt]
+\mathcal{L}(w, b) &= \frac{1}{2n} \sum_{i=1}^{n} (y_i - (w \cdot x_i + b))^2 
+\\[8pt]
+\nabla_w \mathcal{L} &= \frac{1}{n} \sum_{i=1}^{n} (w \cdot x_i + b - y_i) \cdot x_i 
+\\[8pt]
+\nabla_b \mathcal{L} &= \frac{1}{n} \sum_{i=1}^{n} (w \cdot x_i + b - y_i) 
+\\[8pt]
 \theta_{t+1} &= \theta_t - \alpha \cdot \nabla \mathcal{L}(\theta_t)
 \end{aligned}
 $$
