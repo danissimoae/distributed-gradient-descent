@@ -1,0 +1,8 @@
+FROM nginx:alpine
+
+COPY viewer/index.html /usr/share/nginx/html/
+COPY viewer/nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Распределённый градиентный спуск</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Charter', 'Georgia', serif;
+            background: #fafafa;
+            color: #1a1a1a;
+            line-height: 1.6;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 40px;
+            border-bottom: 1px solid #d0d0d0;
+            padding-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #1a1a1a;
+        }
+
+        .subtitle {
+            font-size: 0.95rem;
+            color: #666;
+            font-style: italic;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .metric-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            padding: 20px;
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 300;
+            color: #1a1a1a;
+            font-family: 'Courier New', monospace;
+        }
+
+        .metric-target {
+            font-size: 0.8rem;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        .charts-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .chart-wrapper {
+            background: white;
+            border: 1px solid #e0e0e0;
+            padding: 24px;
+        }
+
+        .chart-title {
+            font-size: 0.95rem;
+            font-weight: 500;
+            margin-bottom: 16px;
+            color: #1a1a1a;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            border: 1px solid #d0d0d0;
+            background: white;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-indicator.active {
+            border-color: #4a4a4a;
+            color: #1a1a1a;
+        }
+
+        .connection-badge {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            font-size: 0.75rem;
+            background: white;
+            border: 1px solid #e0e0e0;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .connection-badge.connected {
+            border-color: #4a4a4a;
+            color: #1a1a1a;
+        }
+
+        canvas {
+            max-height: 280px;
+        }
+
+        @media (max-width: 768px) {
+            .charts-container {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 1.4rem;
+            }
+
+            body {
+                padding: 20px 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-badge" id="connectionBadge">подключение...</div>
+
+    <div class="container">
+        <header>
+            <h1>Распределённый градиентный спуск</h1>
+            <p class="subtitle">Визуализация процесса обучения линейной регрессии</p>
+        </header>
+
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-label">Итерация</div>
+                <div class="metric-value" id="iteration">0</div>
+                <div class="metric-target"><span class="status-indicator" id="status">ожидание</span></div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">Функция потерь</div>
+                <div class="metric-value" id="loss">—</div>
+                <div class="metric-target">MSE</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">Параметр w</div>
+                <div class="metric-value" id="w">0.000</div>
+                <div class="metric-target">целевое: 3.000</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">Параметр b</div>
+                <div class="metric-value" id="b">0.000</div>
+                <div class="metric-target">целевое: 7.000</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">Воркеры</div>
+                <div class="metric-value" id="workers">0</div>
+                <div class="metric-target">активных узлов</div>
+            </div>
+        </div>
+
+        <div class="charts-container">
+            <div class="chart-wrapper">
+                <div class="chart-title">Динамика функции потерь</div>
+                <canvas id="lossChart"></canvas>
+            </div>
+
+            <div class="chart-wrapper">
+                <div class="chart-title">Сходимость параметров</div>
+                <canvas id="paramsChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // В Docker используется nginx proxy, локально - прямое подключение
+        const COORDINATOR_URL = window.location.origin.includes('localhost:8080')
+            ? ''
+            : 'http://localhost:5000';
+        const UPDATE_INTERVAL = 500;
+
+        const chartConfig = {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false,
+                    labels: {
+                        font: { family: 'Charter, Georgia, serif' }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    grid: { color: '#f0f0f0' },
+                    ticks: { font: { family: 'Courier New, monospace', size: 10 } }
+                },
+                x: {
+                    grid: { color: '#f0f0f0' },
+                    ticks: { font: { family: 'Courier New, monospace', size: 10 } }
+                }
+            }
+        };
+
+        const lossChart = new Chart(document.getElementById('lossChart'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Loss',
+                    data: [],
+                    borderColor: '#4a4a4a',
+                    backgroundColor: 'rgba(74, 74, 74, 0.05)',
+                    borderWidth: 1.5,
+                    tension: 0.3,
+                    fill: true,
+                    pointRadius: 0,
+                    pointHoverRadius: 3
+                }]
+            },
+            options: {
+                ...chartConfig,
+                scales: {
+                    ...chartConfig.scales,
+                    y: {
+                        ...chartConfig.scales.y,
+                        beginAtZero: true,
+                        title: { display: true, text: 'MSE', font: { family: 'Charter, Georgia, serif', size: 11 } }
+                    },
+                    x: {
+                        ...chartConfig.scales.x,
+                        title: { display: true, text: 'Итерация', font: { family: 'Charter, Georgia, serif', size: 11 } }
+                    }
+                }
+            }
+        });
+
+        const paramsChart = new Chart(document.getElementById('paramsChart'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'w',
+                        data: [],
+                        borderColor: '#1a1a1a',
+                        backgroundColor: 'rgba(26, 26, 26, 0.05)',
+                        borderWidth: 1.5,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 3
+                    },
+                    {
+                        label: 'b',
+                        data: [],
+                        borderColor: '#808080',
+                        backgroundColor: 'rgba(128, 128, 128, 0.05)',
+                        borderWidth: 1.5,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 3
+                    }
+                ]
+            },
+            options: {
+                ...chartConfig,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            font: { family: 'Courier New, monospace', size: 11 },
+                            usePointStyle: true,
+                            pointStyle: 'line'
+                        }
+                    }
+                },
+                scales: {
+                    ...chartConfig.scales,
+                    y: {
+                        ...chartConfig.scales.y,
+                        title: { display: true, text: 'Значение', font: { family: 'Charter, Georgia, serif', size: 11 } }
+                    },
+                    x: {
+                        ...chartConfig.scales.x,
+                        title: { display: true, text: 'Итерация', font: { family: 'Charter, Georgia, serif', size: 11 } }
+                    }
+                }
+            }
+        });
+
+        async function updateDashboard() {
+            try {
+                const response = await fetch(`${COORDINATOR_URL}/api/history`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                const { history, current_state } = data;
+
+                document.getElementById('connectionBadge').textContent = 'подключено';
+                document.getElementById('connectionBadge').className = 'connection-badge connected';
+
+                document.getElementById('iteration').textContent = current_state.iteration;
+                document.getElementById('loss').textContent = current_state.loss.toFixed(2);
+                document.getElementById('w').textContent = current_state.w.toFixed(3);
+                document.getElementById('b').textContent = current_state.b.toFixed(3);
+                document.getElementById('workers').textContent = current_state.n_workers;
+
+                const statusEl = document.getElementById('status');
+                if (current_state.iteration > 0) {
+                    statusEl.textContent = 'обучение';
+                    statusEl.className = 'status-indicator active';
+                } else {
+                    statusEl.textContent = 'ожидание';
+                    statusEl.className = 'status-indicator';
+                }
+
+                lossChart.data.labels = history.iterations;
+                lossChart.data.datasets[0].data = history.loss;
+                lossChart.update('none');
+
+                paramsChart.data.labels = history.iterations;
+                paramsChart.data.datasets[0].data = history.w;
+                paramsChart.data.datasets[1].data = history.b;
+                paramsChart.update('none');
+
+            } catch (error) {
+                console.error('Ошибка обновления:', error);
+                document.getElementById('connectionBadge').textContent = 'нет связи';
+                document.getElementById('connectionBadge').className = 'connection-badge';
+            }
+        }
+
+        updateDashboard();
+        setInterval(updateDashboard, UPDATE_INTERVAL);
+    </script>
+</body>
+</html>
