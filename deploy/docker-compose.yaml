@@ -1,9 +1,7 @@
-version: '3.8'
-
 services:
   coordinator:
     build:
-      context: .
+      context: ..
       dockerfile: coordinator/Dockerfile
     container_name: gradient-coordinator
     ports:
@@ -18,7 +16,7 @@ services:
 
   worker:
     build:
-      context: .
+      context: ..
       dockerfile: worker/Dockerfile
     depends_on:
       - coordinator
@@ -32,7 +30,7 @@ services:
 
   viewer:
     build:
-      context: .
+      context: ..
       dockerfile: viewer/Dockerfile
     container_name: gradient-viewer
     ports:
