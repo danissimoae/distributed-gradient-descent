@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: viewer
+  namespace: gradient-descent
+  labels:
+    app: viewer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: viewer
+  template:
+    metadata:
+      labels:
+        app: viewer
+    spec:
+      containers:
+      - name: viewer
+        image: gradient-descent-viewer:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: viewer
+  namespace: gradient-descent
+spec:
+  selector:
+    app: viewer
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+    nodePort: 30080
+  type: NodePort
